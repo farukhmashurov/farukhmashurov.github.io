@@ -414,3 +414,31 @@ main {
 .media-list li strong {
   color: #181512;
 }
+
+
+.timeline li,
+.media-list li {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.timeline li > span,
+.media-list li > span {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.timeline li > div,
+.media-list li > div {
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  .timeline li,
+  .media-list li {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
