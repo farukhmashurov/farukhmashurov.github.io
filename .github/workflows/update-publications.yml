@@ -1,0 +1,89 @@
+name: Update publications and deploy homepage
+
+on:
+  schedule:
+    # Mondays 06:35 UTC = Mondays 14:35 in Shenzhen.
+    - cron: '35 6 * * 1'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency:
+  group: homepage-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout homepage repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run offline tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Check Crossref and update index.html
+        if: github.event_name != 'push'
+        env:
+          CROSSREF_MAILTO: ${{ vars.CROSSREF_MAILTO }}
+        run: python scripts/update_publications.py --file index.html
+
+      - name: Commit verified changes
+        if: github.event_name != 'push'
+        run: |
+          if git diff --quiet -- index.html; then
+            echo 'No new journal publications found.'
+          else
+            git diff --check
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add index.html
+            git commit -m 'Update journal publication metadata'
+            git push origin HEAD:main
+          fi
+
+      - name: Create static Pages directory
+        run: |
+          mkdir -p site
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='scripts/' \
+            --exclude='tests/' \
+            --exclude='site/' \
+            --exclude='README_RU.md' \
+            --exclude='CODEX_PROMPT.md' \
+            --exclude='*.zip' \
+            ./ site/
+          touch site/.nojekyll
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish homepage
+        id: deployment
+        uses: actions/deploy-pages@v4
